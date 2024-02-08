@@ -1,15 +1,17 @@
-
 ```{r}
 setwd("C:/Users/marco.curcio/Desktop/reportes_crm")
 library(tidyverse)
 library(ggplot2)
 library(xlsx)
+library(lubridate)
+library(openxlsx)
+hoy <- today()
 ```
 
 ```{r}
 #cargo datasets
 acap_transito <- read.csv("acap_transito.csv", sep = ";")
-acap_casos <- read.csv("acap_casos.csv", sep = ";")
+acap_casos <- read.csv("casos.csv", sep = ",")
 
 #limpio datasets
 acap_transito_clean <- acap_transito %>%
@@ -17,54 +19,74 @@ acap_transito_clean <- acap_transito %>%
 acap_casos_clean <- acap_casos %>%
   select(1,10)
 #unifico y limpio datasets
-casos_join <- acap_transito_clean %>%
-  left_join(acap_casos_clean, by = "caso")
+colnames(acap_casos) <- c("caso","organizacion","encargado","sector","orientacion_ppal",
+                          "orientacion_pot","cupos_acord","dias","hs_est","cup_asig",
+                          "turno","inicio","horario","otro","lanzamiento","etiqueta",
+                          "status","referente","mail_ref","area","escuela","link_pp","acta_ped")
+
+casos_join <- acap_casos %>%
+  select(1,2,4,5,6,7,8,9,10,11,12,13,15,17,20,21)
 
 casos_join_clean <- casos_join %>%
   filter(
-           grepl("2", motivos_de_estado)|
-           grepl("3", motivos_de_estado)|
-           grepl("4", motivos_de_estado)|
-           grepl("5", motivos_de_estado)|
-           grepl("6", motivos_de_estado))
+           grepl("2", status)|
+           grepl("3", status)|
+           grepl("4", status)|
+           grepl("5", status)|
+           grepl("6", status))
+
+
+casos_join_clean$turno <- ifelse(nchar(casos_join_clean$turno)==0, "Sin turno asignado", casos_join_clean$turno)
+casos_join_clean$dias <- ifelse(nchar(casos_join_clean$dias)==0, "Sin dias asignados", casos_join_clean$dias)
+casos_join_clean$horario <- ifelse(nchar(casos_join_clean$horario)==0, "Sin horario asignado", casos_join_clean$horario)
+casos_join_clean$escuela <- ifelse(nchar(casos_join_clean$escuela)==0, "Sin escuela asignada", casos_join_clean$escuela)
+casos_join_clean$orientacion_ppal <- ifelse(nchar(casos_join_clean$orientacion_ppal)==0, "Sin orientacion asignada", casos_join_clean$orientacion_ppal)
+casos_join_clean$sector <- ifelse(nchar(casos_join_clean$sector)==0, "Sin sector asignado", casos_join_clean$sector)
+casos_join_clean$area[is.na(casos_join_clean$area)] <- "Sin area asignada"
+casos_join_clean[is.na(casos_join_clean)] <- 0
+
+
+
+view(casos_join_clean)
 ```
 
 ```{r}
 #analizo datos
-#convierto los NA en 0s
-casos_join_clean[is.na(casos_join_clean)] <- 0
 #casos por estado
 casos_estado <- casos_join_clean %>%
-  group_by(motivos_de_estado) %>%
+  group_by(status) %>%
   count()
 #alumnos por estado
 alumnos_estado <- casos_join_clean %>%
-  group_by(motivos_de_estado) %>%
-  summarise(estudiantes = sum(numero_est_totales))
-#organizaciones por orientacion
+  group_by(status) %>%
+  summarise(estudiantes = sum(cupos_acord))
+#organizaciones por sector
 organizaciones_sector <- casos_join_clean %>%
   group_by(sector) %>%
   count()
-#alumnos por orientacion
+#alumnos por sector
 alumnos_sector <- casos_join_clean %>%
   group_by(sector) %>%
-  summarise(estudiantes = sum(numero_est_totales))
-#alumnos por turnp
+  summarise(estudiantes = sum(cupos_acord))
+#alumnos por orientacion
+alumnos_orientacion <- casos_join_clean %>%
+  group_by(orientacion_ppal) %>%
+  summarise(estudiantes = sum(cupos_acord))
+#alumnos por turno
 alumnos_turno <- casos_join_clean %>%
   group_by(turno) %>%
-  summarise(estudiantes = sum(numero_est_totales))
+  summarise(estudiantes = sum(cupos_acord))
 #organizaciones por turno
 organizaciones_turno <- casos_join_clean %>%
   group_by(turno) %>%
   count()
-view(organizaciones_turno)
 ```
 
 ```{r}
 #hago los graficos
 ##############ACAP por estado###################
-grafico <- ggplot(casos_estado, aes(x=motivos_de_estado, y=n)) +
-  geom_segment( aes(x=motivos_de_estado, xend=motivos_de_estado, y=0, yend=n), color = "#FFBE98", linewidth =20) +
+grafico <- ggplot(casos_estado, aes(x=status, y=n)) +
+  geom_segment( aes(x=status, xend=status, y=0, yend=n), color = "#FFBE98", linewidth =20) +
   ggtitle("Acap por estado") +
   theme_minimal() +
   theme(
@@ -79,13 +101,14 @@ grafico <- ggplot(casos_estado, aes(x=motivos_de_estado, y=n)) +
   ylab("Acap") +
   geom_text(aes(label = n),
             nudge_y = 3)
-ggsave("casos_estado.png",
+ggsave(paste("casos_estado_",hoy, ".png"),
        grafico,
        device = png,
        bg = "white")
+
 ####################Alumnos por estado###########################
-grafico <- ggplot(alumnos_estado, aes(x=motivos_de_estado, y=estudiantes)) +
-  geom_segment( aes(x=motivos_de_estado, xend=motivos_de_estado, y=0, yend=estudiantes), color = "#FFBE98", linewidth =20) +
+grafico <- ggplot(alumnos_estado, aes(x=status, y=estudiantes)) +
+  geom_segment( aes(x=status, xend=status, y=0, yend=estudiantes), color = "#FFBE98", linewidth =20) +
   ggtitle("Estudiantes por estado") +
   theme_minimal() +
   theme(
@@ -101,15 +124,14 @@ grafico <- ggplot(alumnos_estado, aes(x=motivos_de_estado, y=estudiantes)) +
   geom_text(aes(label = estudiantes),
             nudge_y = 40)
 
-grafico
-ggsave("alumnos_estado.png",
+ggsave(paste("alumnos_estado_",hoy, ".png"),
        grafico,
        device = png,
        bg = "white")
 ########################estudiantes por sector##########################
 grafico <- ggplot(alumnos_sector, aes(x=sector, y=estudiantes)) +
   geom_segment( aes(x=sector, xend=sector, y=0, yend=estudiantes), color = "#FFBE98", linewidth =20) +
-  ggtitle("Estudiantes por orientacion") +
+  ggtitle("Estudiantes por sector") +
   theme_minimal() +
   theme(
     panel.grid.major.x = element_blank(),
@@ -124,15 +146,36 @@ grafico <- ggplot(alumnos_sector, aes(x=sector, y=estudiantes)) +
   geom_text(aes(label = estudiantes),
             nudge_y = 40)
 
+ggsave(paste("alumnos_sector_",hoy, ".png"),
+       grafico,
+       device = png,
+       bg = "white")
+###########################Estudiantes por orientacion ppal#####################
+grafico <- ggplot(alumnos_orientacion, aes(x=orientacion_ppal, y=estudiantes)) +
+  geom_segment( aes(x=orientacion_ppal, xend=orientacion_ppal, y=0, yend=estudiantes), color = "#FFBE98", linewidth =5) +
+  ggtitle("Estudiantes por orientacion") +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_text(size = 10),
+    plot.title = element_text(face = "italic")
+  ) +
+  xlab("") +
+  ylab("Estudiantes") +
+  geom_text(aes(label = estudiantes),
+            nudge_y = 40)
 grafico
-ggsave("alumnos_orientacion.png",
+ggsave(paste("alumnos_orientacion_",hoy, ".png"),
        grafico,
        device = png,
        bg = "white")
 ###########################Organizaciones por sector############################
 grafico <- ggplot(organizaciones_sector, aes(x=sector, y=n)) +
   geom_segment( aes(x=sector, xend=sector, y=0, yend=n), color = "#FFBE98", linewidth =20) +
-  ggtitle("Organizaciones por orientacion") +
+  ggtitle("Organizaciones por sector") +
   theme_minimal() +
   theme(
     panel.grid.major.x = element_blank(),
@@ -147,8 +190,8 @@ grafico <- ggplot(organizaciones_sector, aes(x=sector, y=n)) +
   geom_text(aes(label = n),
             nudge_y = 1)
 
-grafico
-ggsave("organizaciones_sector.png",
+
+ggsave(paste("organizaciones_sector_",hoy,".png"),
        grafico,
        device = png,
        bg = "white")
@@ -170,8 +213,8 @@ grafico <- ggplot(alumnos_turno, aes(x=turno, y=estudiantes)) +
   geom_text(aes(label = estudiantes),
             nudge_y = 50)
 
-grafico
-ggsave("estudiantes_turno.png",
+
+ggsave(paste("estudiantes_turno_",hoy, ".png"),
        grafico,
        device = png,
        bg = "white")
@@ -194,10 +237,14 @@ grafico <- ggplot(organizaciones_turno, aes(x=turno, y=n)) +
   geom_text(aes(label = n),
             nudge_y = 3)
 
-grafico
-ggsave("organizaciones_turno.png",
+ggsave(paste("organizaciones_turno_",hoy, ".png"),
        grafico,
        device = png,
        bg = "white")
+#########################armo un excel con todo#################################
+datasets <- list("casos" = casos_join_clean,"casos_estado" = casos_estado, "estudiantes estado" = alumnos_estado,
+                 "estudiantes orientacion" = alumnos_orientacion, "estudiantes sector" = alumnos_sector,
+                 "estudiantes turno" = alumnos_turno, "organizaciones turno" = organizaciones_turno
+                 )
+write.xlsx(datasets, paste("casos_",hoy, ".xlsx"))
 ```
-
