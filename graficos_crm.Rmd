@@ -1,3 +1,4 @@
+
 ```{r}
 setwd("C:/Users/marco.curcio/Desktop/reportes_crm")
 library(tidyverse)
@@ -5,7 +6,9 @@ library(ggplot2)
 library(xlsx)
 library(lubridate)
 library(openxlsx)
-hoy <- today()
+library(sendmailR)
+hoy <- hoy <- format(Sys.Date(), "%d_%m_%Y")
+view(hoy)
 ```
 
 ```{r}
@@ -101,7 +104,7 @@ grafico <- ggplot(casos_estado, aes(x=status, y=n)) +
   ylab("Acap") +
   geom_text(aes(label = n),
             nudge_y = 3)
-ggsave(paste("casos_estado_",hoy, ".png"),
+ggsave(paste("casos_estado_",hoy,".png", sep = ""),
        grafico,
        device = png,
        bg = "white")
@@ -124,7 +127,7 @@ grafico <- ggplot(alumnos_estado, aes(x=status, y=estudiantes)) +
   geom_text(aes(label = estudiantes),
             nudge_y = 40)
 
-ggsave(paste("alumnos_estado_",hoy, ".png"),
+ggsave(paste("alumnos_estado_",hoy,".png",sep = ""),
        grafico,
        device = png,
        bg = "white")
@@ -146,7 +149,7 @@ grafico <- ggplot(alumnos_sector, aes(x=sector, y=estudiantes)) +
   geom_text(aes(label = estudiantes),
             nudge_y = 40)
 
-ggsave(paste("alumnos_sector_",hoy, ".png"),
+ggsave(paste("alumnos_sector_",hoy,".png",sep = ""),
        grafico,
        device = png,
        bg = "white")
@@ -168,7 +171,7 @@ grafico <- ggplot(alumnos_orientacion, aes(x=orientacion_ppal, y=estudiantes)) +
   geom_text(aes(label = estudiantes),
             nudge_y = 40)
 grafico
-ggsave(paste("alumnos_orientacion_",hoy, ".png"),
+ggsave(paste("alumnos_orientacion_",hoy,".png",sep = ""),
        grafico,
        device = png,
        bg = "white")
@@ -191,7 +194,7 @@ grafico <- ggplot(organizaciones_sector, aes(x=sector, y=n)) +
             nudge_y = 1)
 
 
-ggsave(paste("organizaciones_sector_",hoy,".png"),
+ggsave(paste("organizaciones_sector_",hoy,".png",sep = ""),
        grafico,
        device = png,
        bg = "white")
@@ -214,7 +217,7 @@ grafico <- ggplot(alumnos_turno, aes(x=turno, y=estudiantes)) +
             nudge_y = 50)
 
 
-ggsave(paste("estudiantes_turno_",hoy, ".png"),
+ggsave(paste("estudiantes_turno_",hoy,".png",sep = ""),
        grafico,
        device = png,
        bg = "white")
@@ -237,7 +240,7 @@ grafico <- ggplot(organizaciones_turno, aes(x=turno, y=n)) +
   geom_text(aes(label = n),
             nudge_y = 3)
 
-ggsave(paste("organizaciones_turno_",hoy, ".png"),
+ggsave(paste("organizaciones_turno_",hoy,".png",sep = ""),
        grafico,
        device = png,
        bg = "white")
@@ -246,5 +249,38 @@ datasets <- list("casos" = casos_join_clean,"casos_estado" = casos_estado, "estu
                  "estudiantes orientacion" = alumnos_orientacion, "estudiantes sector" = alumnos_sector,
                  "estudiantes turno" = alumnos_turno, "organizaciones turno" = organizaciones_turno
                  )
-write.xlsx(datasets, paste("casos_",hoy, ".xlsx"))
+write.xlsx(datasets, paste("casos_",hoy,".xlsx",sep = ""))
+```
+
+```{r}
+#prueba automatizar mail
+####################ubicacion de los archivos a adjuntar#########################
+archivos <- c("casos_estado_", "alumnos_estado_", "alumnos_sector_", 
+             "alumnos_orientacion_", "organizaciones_sector_", 
+             "estudiantes_turno_", "organizaciones_turno_")
+# Inicializar un vector vacío para almacenar los nombres de archivo generados
+list_files_attached_location <- character(length(archivos))
+#genero el loop
+for (i in seq_along(archivos)) {
+  list_files_attached_location[i] <- paste0(archivos[i], hoy, ".png")
+}
+###################nombre de los archivos################
+list_files_attached_names <- c("casos_estado","alumnos_estado","alumnos_sector","alumnos_orientacion",
+                               "organizaciones_sector","estudiantes_turno","organizaciones_turno")
+
+
+###mandar mail 
+sender <- "m*****************@bue.edu.ar"
+recipients <- c("c************@gmail.com")
+send.mail(from = sender,
+to = recipients,
+subject="Reportes semanales",
+body = paste("Buenos dias te mando los reportes actualizados al dia", hoy),
+smtp = list(host.name = "smtp.gmail.com", port = 465, 
+        user.name="m***********@bue.edu.ar", passwd="*****************", ssl=TRUE),
+authenticate = TRUE,
+send = TRUE,
+attach.files = list_files_attached_location,
+file.names = list_files_attached_names)
+
 ```
