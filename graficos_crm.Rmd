@@ -7,20 +7,31 @@ library(xlsx)
 library(lubridate)
 library(openxlsx)
 library(sendmailR)
+library(gmailr)
+library(mailR)
+library(janitor)
 hoy <- hoy <- format(Sys.Date(), "%d_%m_%Y")
-view(hoy)
+```
+
+```{r}
+gm_auth_configure(path = "client_secret_422602215757-vo4d41n6rrrqb8imja5d4hln2ij40g7f.apps.googleusercontent.com.json")
+
+mssgs = gm_messages(search="oro_datagrid",num_results = NULL, label_ids = NULL,include_spam_trash = NULL,page_token = NULL, user_id = "curciomarco1@gmail.com")
+
+my_threads <- gm_threads(num_results = 1)
+latest_thread <- gm_thread(gm_id(my_threads)[[1]])
+my_msg <- latest_thread$messages[[1]]
+
+
+gm_save_attachments(my_msg, path = getwd())
+
 ```
 
 ```{r}
 #cargo datasets
-acap_transito <- read.csv("acap_transito.csv", sep = ";")
-acap_casos <- read.csv("casos.csv", sep = ",")
+acap_casos <- read.xlsx("casos.xlsx")
 
 #limpio datasets
-acap_transito_clean <- acap_transito %>%
-  select(1,2,4,5,6,7,8,9,10,11)
-acap_casos_clean <- acap_casos %>%
-  select(1,10)
 #unifico y limpio datasets
 colnames(acap_casos) <- c("caso","organizacion","encargado","sector","orientacion_ppal",
                           "orientacion_pot","cupos_acord","dias","hs_est","cup_asig",
@@ -47,10 +58,6 @@ casos_join_clean$orientacion_ppal <- ifelse(nchar(casos_join_clean$orientacion_p
 casos_join_clean$sector <- ifelse(nchar(casos_join_clean$sector)==0, "Sin sector asignado", casos_join_clean$sector)
 casos_join_clean$area[is.na(casos_join_clean$area)] <- "Sin area asignada"
 casos_join_clean[is.na(casos_join_clean)] <- 0
-
-
-
-view(casos_join_clean)
 ```
 
 ```{r}
@@ -83,6 +90,34 @@ alumnos_turno <- casos_join_clean %>%
 organizaciones_turno <- casos_join_clean %>%
   group_by(turno) %>%
   count()
+#organizaciones por sector
+organizaciones_sector <- casos_join_clean %>%
+  group_by(sector) %>%
+  count()
+view(organizaciones_sector_status)
+#organizaciones sector, status
+organizaciones_sector_status <- casos_join_clean %>%
+  group_by(sector, status) %>%
+  count() %>%
+  pivot_wider(names_from = status,
+              values_from = n)
+
+organizaciones_sector_status <- organizaciones_sector_status[c(1,5,2,3,4)]
+organizaciones_sector_status[is.na(organizaciones_sector_status)] <- 0
+organizaciones_sector_status <- organizaciones_sector_status  %>%
+  adorn_totals("col")
+#alumnos por status
+alumnos_status <- casos_join_clean %>%
+  group_by(status) %>%
+  summarise(estudiantes = sum(cupos_acord))
+#organizaciones por status
+organizaciones_status <- casos_join_clean %>%
+  group_by(status) %>%
+  count()
+#organizaciones reporte semanal
+status_semanal <- alumnos_status %>%
+  left_join(organizaciones_status, by = ("status" = "status"))
+colnames(status_semanal) <- c("Status", hoy, "Cantidad de ACAP/Casos")
 ```
 
 ```{r}
@@ -108,7 +143,6 @@ ggsave(paste("casos_estado_",hoy,".png", sep = ""),
        grafico,
        device = png,
        bg = "white")
-
 ####################Alumnos por estado###########################
 grafico <- ggplot(alumnos_estado, aes(x=status, y=estudiantes)) +
   geom_segment( aes(x=status, xend=status, y=0, yend=estudiantes), color = "#FFBE98", linewidth =20) +
@@ -221,7 +255,6 @@ ggsave(paste("estudiantes_turno_",hoy,".png",sep = ""),
        grafico,
        device = png,
        bg = "white")
-
 #######################organizaciones por turno####################
 grafico <- ggplot(organizaciones_turno, aes(x=turno, y=n)) +
   geom_segment( aes(x=turno, xend=turno, y=0, yend=n), color = "#FFBE98", linewidth =20) +
@@ -247,9 +280,12 @@ ggsave(paste("organizaciones_turno_",hoy,".png",sep = ""),
 #########################armo un excel con todo#################################
 datasets <- list("casos" = casos_join_clean,"casos_estado" = casos_estado, "estudiantes estado" = alumnos_estado,
                  "estudiantes orientacion" = alumnos_orientacion, "estudiantes sector" = alumnos_sector,
-                 "estudiantes turno" = alumnos_turno, "organizaciones turno" = organizaciones_turno
+                 "estudiantes turno" = alumnos_turno, "organizaciones turno" = organizaciones_turno,
+                 "estudiantes status" = alumnos_status, "organizaciones status"=organizaciones_sector_status
                  )
+datasets_meli <- list("sector_status" = organizaciones_sector_status, "totales" = status_semanal)
 write.xlsx(datasets, paste("casos_",hoy,".xlsx",sep = ""))
+write.xlsx(datasets_meli, paste("reporte_",hoy,".xlsx",sep = ""))
 ```
 
 ```{r}
@@ -270,17 +306,15 @@ list_files_attached_names <- c("casos_estado","alumnos_estado","alumnos_sector",
 
 
 ###mandar mail 
-sender <- "m*****************@bue.edu.ar"
-recipients <- c("c************@gmail.com")
+sender <- "*****************"
+recipients <- c("*****************")
 send.mail(from = sender,
 to = recipients,
 subject="Reportes semanales",
-body = paste("Buenos dias te mando los reportes actualizados al dia", hoy),
+body = paste("Buenos dias te mando los reportes actualizados al dia ", hoy, sep=""),
 smtp = list(host.name = "smtp.gmail.com", port = 465, 
-        user.name="m***********@bue.edu.ar", passwd="*****************", ssl=TRUE),
+        user.name="*****************", passwd="**********************", ssl=TRUE),
 authenticate = TRUE,
 send = TRUE,
 attach.files = list_files_attached_location,
 file.names = list_files_attached_names)
-
-```
